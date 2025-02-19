@@ -13,7 +13,7 @@ Read more about Parallel Luau here: [Parallel Luau](https://create.roblox.com/do
 2. Add the dependency to your project's `wally.toml` file
 ```toml
 [dependencies]
-Parallel = "dig/Parallel@^1"
+Parallel = "dig/parallel@^1"
 ```
 3. Run `wally install`
 
