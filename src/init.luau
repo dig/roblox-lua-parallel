@@ -16,9 +16,13 @@ export type PreparedParallel = {
   destroy: () -> (),
 }
 
+type ActorStateMap = {
+  [Actor]: ActorState,
+}
+
 type ActorState = {
   count: number,
-  running: {Promise},
+  running: { [Promise]: boolean },
 }
 
 -- Set correct worker folder depending on
@@ -37,6 +41,7 @@ local Parallel = {}
 Parallel.__index = Parallel
 
 function Parallel.of(runnable: (...any?) -> any?): PreparedParallel
+  assert(type(runnable) == "function", "Runnable must be a function")
   local self = setmetatable({
     _runnable = runnable,
     _name = "ParallelWorker",
@@ -44,9 +49,9 @@ function Parallel.of(runnable: (...any?) -> any?): PreparedParallel
     _bindableEvent = Instance.new("BindableEvent"),
     _folder = Instance.new("Folder"),
 
-    _actors = {},
-    _actorState = {} :: ActorState,
-    _results = {},
+    _actors = {} :: { Actor },
+    _actorState = {} :: ActorStateMap,
+    _results = {} :: { [string]: table },
 
     _connection = nil,
     _destroyed = false,
@@ -63,6 +68,8 @@ end
 
 function Parallel:withName(name: string): PreparedParallel
   assert(not self._destroyed, "Parallel destroyed")
+  assert(type(name) == "string", "Name must be a string")
+  assert(#name > 0, "Name must be non-empty")
   self._name = name
   self._folder.Name = name
   return self
@@ -70,6 +77,8 @@ end
 
 function Parallel:withActors(actorCount: number): PreparedParallel
   assert(not self._destroyed, "Parallel destroyed")
+  assert(type(actorCount) == "number", "Actor count must be a number")
+  assert(actorCount > 0, "Actor count must be greater than 0")
   self._actorCount = actorCount
   self:_createActors()
   return self
@@ -121,7 +130,6 @@ end
 function Parallel:destroy()
   assert(not self._destroyed, "Parallel already destroyed")
   self._destroyed = true
-
   self._connection:Disconnect()
   self._connection = nil
 
@@ -129,7 +137,6 @@ function Parallel:destroy()
     for runningPromise, _ in self._actorState[actor].running do
       runningPromise:cancel()
     end
-
     actor:SendMessage("Parallel:Destroy")
   end
 
@@ -139,18 +146,17 @@ function Parallel:destroy()
 
   self._bindableEvent:Destroy()
   self._bindableEvent = nil
-
   self._folder:Destroy()
   self._folder = nil
 end
 
 function Parallel:_findAvailableActor(): Actor
   assert(#self._actors > 0, "No available actors")
-  
-  -- Find actor with least running promises
-  local min = 999_999
-  local minActor = nil
-  for _, actor in self._actors do
+  local min = self._actors[1]
+  local minActor = self._actorState[min].count
+
+  for i = 2, #self._actors do
+    local actor = self._actors[i]
     local count = self._actorState[actor].count
     if count < min then
       min = count
@@ -187,7 +193,7 @@ function Parallel._createTemplatedActor(): Actor
 end
 
 function Parallel:__tostring()
-  return string.format("Parallel(%s)", self._name)
+  return string.format("Parallel<%s>", self._name)
 end
 
 return Parallel

@@ -1,6 +1,6 @@
 {
-  "name": "roblox-lua-parallel",
+  "name": "parallel",
   "tree": {
-    "$path": "lib"
+    "$path": "src"
   }
 }
