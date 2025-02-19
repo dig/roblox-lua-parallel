@@ -4,8 +4,7 @@ local ServerStorage = game:GetService("ServerStorage")
 
 local Promise = require(script.Parent.Promise)
 
-local ClientActor = script.ClientActor
-local ServerActor = script.ServerActor
+local Actor = script.Actor
 
 export type Promise = typeof(Promise)
 export type PreparedParallel = {
@@ -16,24 +15,34 @@ export type PreparedParallel = {
   destroy: () -> (),
 }
 
-type ActorStateMap = {
-  [Actor]: ActorState,
-}
-
 type ActorState = {
   count: number,
   running: { [Promise]: boolean },
 }
 
--- Set correct worker folder depending on
--- client or server context
-local workersFolder = nil
-if RunService:IsServer() then
-  workersFolder = ServerStorage:FindFirstChild("ParallelWorkers") or Instance.new("Folder")
-  workersFolder.Name = "ParallelWorkers"
-  workersFolder.Parent = ServerStorage
-elseif RunService:IsClient() then
-  workersFolder = script
+type ActorStateMap = {
+  [Actor]: ActorState,
+}
+
+local workersFolder: Instance? = nil
+local function getOrFindWorkerFolder(): Instance
+  if workersFolder == nil then
+    if RunService:IsServer() then
+      workersFolder = ServerStorage:FindFirstChild("ParallelWorkers") or Instance.new("Folder")
+      workersFolder.Name = "ParallelWorkers"
+      workersFolder.Parent = ServerStorage
+    elseif RunService:IsClient() then
+      workersFolder = script
+    end
+  end
+
+  return workersFolder
+end
+
+local function createTemplatedActor(): Actor
+  local actor = Actor:Clone()
+  require(actor.Worker)
+  return actor
 end
 
 -- Parallel class
@@ -60,8 +69,7 @@ function Parallel.of(runnable: (...any?) -> any?): PreparedParallel
   self._connection = self._bindableEvent.Event:Connect(function(uuid: string, ...: any)
     self._results[uuid] = {...}
   end)
-
-  self._folder.Parent = workersFolder
+  self._folder.Parent = getOrFindWorkerFolder()
   self:_createActors()
   return self
 end
@@ -99,7 +107,7 @@ function Parallel:submit(...: any?): Promise
   local actor = self:_findAvailableActor()
   local uuid = HttpService:GenerateGUID(false)
 
-  local promise
+  local promise = nil
   local function cleanup(status: string)
     if status == "Cancelled" or status == "Rejected" then
       actor:SendMessage("Parallel:CancelTask", uuid)
@@ -169,7 +177,7 @@ end
 
 function Parallel:_createActors()
   for _ = 1, self._actorCount - #self._actors do
-    local actor = Parallel._createTemplatedActor()
+    local actor = createTemplatedActor()
     actor.Parent = self._folder
     actor:SendMessage("Parallel:Init", self._bindableEvent, self._runnable)
 
@@ -179,17 +187,6 @@ function Parallel:_createActors()
     }
     table.insert(self._actors, actor)
   end
-end
-
-function Parallel._createTemplatedActor(): Actor
-  local actor = nil
-  if RunService:IsServer() then
-    actor = ServerActor:Clone()
-  else
-    actor = ClientActor:Clone()
-  end
-  require(actor.Worker)
-  return actor
 end
 
 function Parallel:__tostring()

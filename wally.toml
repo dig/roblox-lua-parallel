@@ -1,11 +1,11 @@
 [package]
 name = "dig/parallel"
 description = "Parallel execution library for Roblox lua"
-version = "1.0.1"
+version = "1.0.2"
 license = "MIT"
 registry = "https://github.com/UpliftGames/wally-index"
 realm = "shared"
-include = ["src", "default.project.json"]
+include = ["src", "default.project.json", "LICENSE"]
 
 [dependencies]
 Promise = "evaera/promise@4.0.0"
