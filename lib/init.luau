@@ -26,9 +26,9 @@ Parallel.__index = Parallel
 
 function Parallel.of(runnable: (...any?) -> any?): PreparedParallel
   local self = setmetatable({
-		_runnable = runnable,
-		_name = "ParallelWorker",
-		_actorCount = 1,
+    _runnable = runnable,
+    _name = "ParallelWorker",
+    _actorCount = 1,
     _bindableEvent = Instance.new("BindableEvent"),
     _folder = Instance.new("Folder"),
 
@@ -38,7 +38,7 @@ function Parallel.of(runnable: (...any?) -> any?): PreparedParallel
 
     _connection = nil,
     _destroyed = false,
-	}, Parallel)
+  }, Parallel)
 
   self._connection = self._bindableEvent.Event:Connect(function(uuid: string, ...: any)
     self._results[uuid] = {...}
@@ -175,7 +175,7 @@ function Parallel._createTemplatedActor(): Actor
 end
 
 function Parallel:__tostring()
-	return string.format("Parallel(%s)", self._name)
+  return string.format("Parallel(%s)", self._name)
 end
 
 return Parallel
