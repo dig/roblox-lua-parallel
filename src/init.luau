@@ -152,8 +152,8 @@ end
 
 function Parallel:_findAvailableActor(): Actor
   assert(#self._actors > 0, "No available actors")
-  local min = self._actors[1]
-  local minActor = self._actorState[min].count
+  local minActor = self._actors[1]
+  local min = self._actorState[minActor].count
 
   for i = 2, #self._actors do
     local actor = self._actors[i]
