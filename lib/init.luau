@@ -1,5 +1,6 @@
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Promise = require(script.Parent.Promise)
 
@@ -19,6 +20,17 @@ type ActorState = {
   count: number,
   running: {Promise},
 }
+
+-- Set correct worker folder depending on
+-- client or server context
+local workersFolder = nil
+if RunService:IsServer() then
+  workersFolder = ServerStorage:FindFirstChild("ParallelWorkers") or Instance.new("Folder")
+  workersFolder.Name = "ParallelWorkers"
+  workersFolder.Parent = ServerStorage
+elseif RunService:IsClient() then
+  workersFolder = script
+end
 
 -- Parallel class
 local Parallel = {}
@@ -44,7 +56,7 @@ function Parallel.of(runnable: (...any?) -> any?): PreparedParallel
     self._results[uuid] = {...}
   end)
 
-  self._folder.Parent = script
+  self._folder.Parent = workersFolder
   self:_createActors()
   return self
 end
