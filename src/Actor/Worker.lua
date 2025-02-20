@@ -12,7 +12,7 @@ local function add(connection: RBXScriptConnection)
   table.insert(connections, connection)
 end
 
-add(actor:BindToMessageParallel("Parallel:Init", function(bindable: BindableEvent, runnable: (...any?) -> any?)
+add(actor:BindToMessage("Parallel:Init", function(bindable: BindableEvent, runnable: (...any?) -> any?)
   assert(not destroyed, "Parallel destroyed")
   bindableEvent = bindable
   preparedRunnable = runnable
@@ -24,7 +24,7 @@ add(actor:BindToMessageParallel("Parallel:Run", function(...: any?)
   preparedRunnable(...)
 end))
 
-add(actor:BindToMessageParallel("Parallel:SubmitTask", function(uuid: string, ...: any?)
+add(actor:BindToMessage("Parallel:SubmitTask", function(uuid: string, ...: any?)
   assert(preparedRunnable, "Parallel not initialized")
   assert(not destroyed, "Parallel destroyed")
   local args = {...}
@@ -34,11 +34,14 @@ add(actor:BindToMessageParallel("Parallel:SubmitTask", function(uuid: string, ..
     tasks[uuid] = nil
   end
   tasks[uuid] = task.spawn(function()
+    -- PARALLEL: Switch to parallel thread
+    task.desynchronize()
+
     bindableEvent:Fire(uuid, preparedRunnable(table.unpack(args)))
   end)
 end))
 
-add(actor:BindToMessageParallel("Parallel:CancelTask", function(uuid: string)
+add(actor:BindToMessage("Parallel:CancelTask", function(uuid: string)
   assert(preparedRunnable, "Parallel not initialized")
   assert(not destroyed, "Parallel destroyed")
   if tasks[uuid] ~= nil then
@@ -47,7 +50,7 @@ add(actor:BindToMessageParallel("Parallel:CancelTask", function(uuid: string)
   end
 end))
 
-add(actor:BindToMessageParallel("Parallel:Destroy", function()
+add(actor:BindToMessage("Parallel:Destroy", function()
   assert(preparedRunnable, "Parallel not initialized")
   assert(not destroyed, "Parallel destroyed")
   destroyed = true
