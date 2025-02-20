@@ -1,10 +1,12 @@
+local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
-local ServerStorage = game:GetService("ServerStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
 
 local Promise = require(script.Parent.Promise)
 
-local Actor = script.Actor
+local ClientActor = script.ClientActor
+local ServerActor = script.ServerActor
 
 export type Promise = typeof(Promise)
 export type PreparedParallel = {
@@ -25,32 +27,52 @@ type ActorStateMap = {
 }
 
 local workersFolder: Instance? = nil
-local function getOrFindWorkerFolder(): Instance
+local function getOrFindWorkerFolder(): Instance?
   if workersFolder == nil then
     if RunService:IsServer() then
-      workersFolder = ServerStorage:FindFirstChild("ParallelWorkers") or Instance.new("Folder")
+      workersFolder = ServerScriptService:FindFirstChild("ParallelWorkers") or Instance.new("Folder")
       workersFolder.Name = "ParallelWorkers"
-      workersFolder.Parent = ServerStorage
-    elseif RunService:IsClient() then
-      workersFolder = script
+      workersFolder.Parent = ServerScriptService
+    else
+      local playerScripts = Players.LocalPlayer:FindFirstChild("PlayerScripts")
+      workersFolder = playerScripts:FindFirstChild("ParallelWorkers") or Instance.new("Folder")
+      workersFolder.Name = "ParallelWorkers"
+      workersFolder.Parent = playerScripts
     end
   end
 
   return workersFolder
 end
 
-local function createTemplatedActor(): Actor
-  local actor = Actor:Clone()
-  require(actor.Worker)
-  return actor
+local function createTemplatedActor(runnable: ModuleScript): (Actor, LocalScript | Script)
+  local actor = nil
+  if RunService:IsServer() then
+    actor = ServerActor:Clone()
+  else
+    actor = ClientActor:Clone()
+  end
+
+  local clonedModule = runnable:Clone()
+  clonedModule.Name = "Runnable"
+  clonedModule.Parent = actor
+  return actor, actor:FindFirstChild("Worker")
+end
+
+local function waitForActorInit(actor: Actor): Promise
+  return Promise.new(function(resolve)
+    while actor:GetAttribute("Initialized") == nil do
+      task.wait()
+    end
+    resolve(actor)
+  end)
 end
 
 -- Parallel class
 local Parallel = {}
 Parallel.__index = Parallel
 
-function Parallel.of(runnable: (...any?) -> any?): PreparedParallel
-  assert(type(runnable) == "function", "Runnable must be a function")
+function Parallel.of(runnable: ModuleScript): PreparedParallel
+  assert(typeof(runnable) == "Instance" and runnable:IsA("ModuleScript"), "Runnable must be a ModuleScript reference")
   local self = setmetatable({
     _runnable = runnable,
     _name = "ParallelWorker",
@@ -69,6 +91,7 @@ function Parallel.of(runnable: (...any?) -> any?): PreparedParallel
   self._connection = self._bindableEvent.Event:Connect(function(uuid: string, ...: any)
     self._results[uuid] = {...}
   end)
+  self._bindableEvent.Parent = self._folder
   self._folder.Parent = getOrFindWorkerFolder()
   self:_createActors()
   return self
@@ -95,7 +118,8 @@ end
 function Parallel:run(...: any?)
   assert(not self._destroyed, "Parallel destroyed")
   local args = {...}
-  return Promise.promisify(self._findAvailableActor)(self)
+  return Promise.promisify(self._findActor)(self)
+    :andThen(waitForActorInit)
     :andThen(function(actor: Actor)
       actor:SendMessage("Parallel:Run", table.unpack(args))
     end)
@@ -104,7 +128,7 @@ end
 function Parallel:submit(...: any?): Promise
   assert(not self._destroyed, "Parallel destroyed")
   local args = {...}
-  local actor = self:_findAvailableActor()
+  local actor = self:_findActor()
   local uuid = HttpService:GenerateGUID(false)
 
   local promise = nil
@@ -118,17 +142,17 @@ function Parallel:submit(...: any?): Promise
     self._actorState[actor].running[promise] = nil
   end
 
-  promise = Promise.new(function(resolve)
-    actor:SendMessage("Parallel:SubmitTask", uuid, table.unpack(args))
-    resolve()
-  end)
-  :andThen(function()
-    while self._results[uuid] == nil do
-      task.wait()
-    end
-    return table.unpack(self._results[uuid])
-  end)
-  :finally(cleanup)
+  promise = waitForActorInit(actor)
+    :andThen(function()
+      actor:SendMessage("Parallel:SubmitTask", uuid, table.unpack(args))
+    end)
+    :andThen(function()
+      while self._results[uuid] == nil do
+        task.wait()
+      end
+      return table.unpack(self._results[uuid])
+    end)
+    :finally(cleanup)
 
   self._actorState[actor].count += 1
   self._actorState[actor].running[promise] = true
@@ -158,8 +182,8 @@ function Parallel:destroy()
   self._folder = nil
 end
 
-function Parallel:_findAvailableActor(): Actor
-  assert(#self._actors > 0, "No available actors")
+function Parallel:_findActor(): Actor
+  assert(#self._actors > 0, "No actors")
   local minActor = self._actors[1]
   local min = self._actorState[minActor].count
 
@@ -177,9 +201,9 @@ end
 
 function Parallel:_createActors()
   for _ = 1, self._actorCount - #self._actors do
-    local actor = createTemplatedActor()
+    local actor, runner = createTemplatedActor(self._runnable)
     actor.Parent = self._folder
-    actor:SendMessage("Parallel:Init", self._bindableEvent, self._runnable)
+    runner.Disabled = false
 
     self._actorState[actor] = {
       count = 0,

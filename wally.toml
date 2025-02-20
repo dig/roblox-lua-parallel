@@ -1,7 +1,7 @@
 [package]
 name = "dig/parallel"
 description = "Parallel execution library for Roblox lua"
-version = "1.0.3"
+version = "1.0.4"
 license = "MIT"
 registry = "https://github.com/UpliftGames/wally-index"
 realm = "shared"

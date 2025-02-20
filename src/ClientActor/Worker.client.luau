@@ -1,30 +1,18 @@
 local actor = script:GetActor()
 
-local connections = {}
-local preparedRunnable = nil
-local bindableEvent = nil
+local preparedRunnable = require(script.Parent.Runnable)
+local bindableEvent = script.Parent.Parent.Event
+local destroyed = false
 
 local tasks = {}
 
-local destroyed = false
-
-local function add(connection: RBXScriptConnection)
-  table.insert(connections, connection)
-end
-
-add(actor:BindToMessage("Parallel:Init", function(bindable: BindableEvent, runnable: (...any?) -> any?)
-  assert(not destroyed, "Parallel destroyed")
-  bindableEvent = bindable
-  preparedRunnable = runnable
-end))
-
-add(actor:BindToMessageParallel("Parallel:Run", function(...: any?)
+actor:BindToMessageParallel("Parallel:Run", function(...: any?)
   assert(preparedRunnable, "Parallel not initialized")
   assert(not destroyed, "Parallel destroyed")
   preparedRunnable(...)
-end))
+end)
 
-add(actor:BindToMessage("Parallel:SubmitTask", function(uuid: string, ...: any?)
+actor:BindToMessage("Parallel:SubmitTask", function(uuid: string, ...: any?)
   assert(preparedRunnable, "Parallel not initialized")
   assert(not destroyed, "Parallel destroyed")
   local args = {...}
@@ -36,29 +24,23 @@ add(actor:BindToMessage("Parallel:SubmitTask", function(uuid: string, ...: any?)
   tasks[uuid] = task.spawn(function()
     -- PARALLEL: Switch to parallel thread
     task.desynchronize()
-
     bindableEvent:Fire(uuid, preparedRunnable(table.unpack(args)))
   end)
-end))
+end)
 
-add(actor:BindToMessage("Parallel:CancelTask", function(uuid: string)
+actor:BindToMessage("Parallel:CancelTask", function(uuid: string)
   assert(preparedRunnable, "Parallel not initialized")
   assert(not destroyed, "Parallel destroyed")
   if tasks[uuid] ~= nil then
     task.cancel(tasks[uuid])
     tasks[uuid] = nil
   end
-end))
+end)
 
-add(actor:BindToMessage("Parallel:Destroy", function()
+actor:BindToMessage("Parallel:Destroy", function()
   assert(preparedRunnable, "Parallel not initialized")
   assert(not destroyed, "Parallel destroyed")
   destroyed = true
-
-  for _, connection in connections do
-    connection:Disconnect()
-  end
-  connections = {}
 
   for _, t in tasks do
     task.cancel(t)
@@ -67,6 +49,6 @@ add(actor:BindToMessage("Parallel:Destroy", function()
 
   preparedRunnable = nil
   bindableEvent = nil
-end))
+end)
 
-return nil
+script.Parent:SetAttribute("Initialized", true)

@@ -13,7 +13,7 @@ Read more about Parallel Luau here: [Parallel Luau](https://create.roblox.com/do
 2. Add the dependency to your project's `wally.toml` file
 ```toml
 [dependencies]
-Parallel = "dig/parallel@1.0.3"
+Parallel = "dig/parallel@1.0.4"
 ```
 3. Run `wally install`
 
@@ -30,11 +30,9 @@ local Packages = ReplicatedStorage:WaitForChild("Packages")
 -- Require parallel module
 local Parallel = require(Packages.Parallel)
 
--- Prepare a thread with a runnable function
--- This function will be executed in a new thread
-local preparedThread = Parallel.of(function()
-  return "Hello, world!"
-end)
+-- Prepare a thread with a runnable module script
+-- See below for ExampleHelloWorld.lua
+local preparedThread = Parallel.of(script.ExampleHelloWorld)
 
 -- Submit the thread and get the result via promise
 local result = preparedThread:submit():expect()
@@ -43,8 +41,15 @@ print(result) -- Prints "Hello, world!"
 preparedThread:destroy()
 ```
 
+ExampleHelloWorld.lua module script:
+```lua
+return function()
+  return "Hello, world!"
+end
+```
+
 ## Advanced Example
-This example runs spatial query function `GetPartBoundsInBox` in a new thread and returns the results:
+This example runs spatial query function `GetPartBoundsInBox` in a new thread and returns the result:
 ```lua
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -53,11 +58,9 @@ local Packages = ReplicatedStorage:WaitForChild("Packages")
 -- Require parallel module
 local Parallel = require(Packages.Parallel)
 
--- Prepare a thread with a runnable function
--- This function will be executed in a new thread
-local preparedThread = Parallel.of(function(position: CFrame, size: Vector3)
-  return workspace:GetPartBoundsInBox(position, size)
-end)
+-- Prepare a thread with a runnable module script
+-- See below for SpatialQuery.lua
+local preparedThread = Parallel.of(script.SpatialQuery)
   :withName("SpatialQueryWorker")
   :withActors(2)
 
@@ -82,3 +85,9 @@ end
 preparedThread:destroy()
 ```
 
+SpatialQuery.lua module script:
+```lua
+return function(position: CFrame, size: Vector3)
+  return workspace:GetPartBoundsInBox(position, size)
+end
+```
