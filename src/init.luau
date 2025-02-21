@@ -83,6 +83,7 @@ function Parallel.of(runnable: ModuleScript): PreparedParallel
     _actors = {} :: { Actor },
     _actorState = {} :: ActorStateMap,
     _results = {} :: { [string]: table },
+    _actorIndex = 1,
 
     _connection = nil,
     _destroyed = false,
@@ -111,6 +112,7 @@ function Parallel:withActors(actorCount: number): PreparedParallel
   assert(type(actorCount) == "number", "Actor count must be a number")
   assert(actorCount > 0, "Actor count must be greater than 0")
   self._actorCount = actorCount
+  self._actorIndex = math.min(self._actorIndex, actorCount)
   self:_createActors()
   return self
 end
@@ -184,19 +186,14 @@ end
 
 function Parallel:_findActor(): Actor
   assert(#self._actors > 0, "No actors")
-  local minActor = self._actors[1]
-  local min = self._actorState[minActor].count
+  local actor = self._actors[self._actorIndex]
 
-  for i = 2, #self._actors do
-    local actor = self._actors[i]
-    local count = self._actorState[actor].count
-    if count < min then
-      min = count
-      minActor = actor
-    end
+  self._actorIndex += 1
+  if self._actorIndex > #self._actors then
+    self._actorIndex = 1
   end
 
-  return minActor
+  return actor
 end
 
 function Parallel:_createActors()

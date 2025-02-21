@@ -25,6 +25,7 @@ actor:BindToMessage("Parallel:SubmitTask", function(uuid: string, ...: any?)
     -- PARALLEL: Switch to parallel thread
     task.desynchronize()
     bindableEvent:Fire(uuid, preparedRunnable(table.unpack(args)))
+    tasks[uuid] = nil
   end)
 end)
 
